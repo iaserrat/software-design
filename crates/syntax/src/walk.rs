@@ -31,13 +31,52 @@ pub(crate) fn extract(lang: Lang, source: &str) -> FileFacts {
         docs: HashMap::new(),
     };
     walker.collect_comments(tree.root_node());
-    walker.walk(tree.root_node());
+    traverse(tree.root_node(), |node, entering| {
+        if entering {
+            walker.enter(node);
+        } else {
+            walker.exit(node);
+        }
+        true
+    });
     walker.facts
+}
+
+/// Visits `root` and its descendants depth first without recursing, so deep trees
+/// cannot overflow the stack. `visit(node, true)` runs on entry and returns whether
+/// to descend; `visit(node, false)` runs once the node's children are done.
+fn traverse<'t>(root: Node<'t>, mut visit: impl FnMut(Node<'t>, bool) -> bool) {
+    let mut cursor = root.walk();
+    loop {
+        if visit(cursor.node(), true) && cursor.goto_first_child() {
+            continue;
+        }
+        loop {
+            visit(cursor.node(), false);
+            if cursor.node() == root {
+                return;
+            }
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            if !cursor.goto_parent() {
+                return;
+            }
+        }
+    }
 }
 
 /// A comment on its own line describes at most this many following lines of
 /// code. A longer reach would compare the comment with code it does not describe.
 const DESCRIBED_LINES: usize = 3;
+
+/// What a function body returns.
+struct Returns {
+    /// A value, not just control: `void`, `None` and `()` are no value.
+    value: bool,
+    /// Several values by position: a tuple, a list literal or `[A, B]` type.
+    tuple: bool,
+}
 
 /// The class, impl or trait whose methods are being visited.
 struct Scope {
@@ -71,25 +110,6 @@ struct Walker<'a> {
 impl<'a> Walker<'a> {
     fn text(&self, node: Node<'_>) -> &'a str {
         node.utf8_text(self.source).unwrap_or_default()
-    }
-
-    fn walk(&mut self, root: Node<'_>) {
-        let mut cursor = root.walk();
-        'outer: loop {
-            self.enter(cursor.node());
-            if cursor.goto_first_child() {
-                continue;
-            }
-            loop {
-                self.exit(cursor.node());
-                if cursor.goto_next_sibling() {
-                    continue 'outer;
-                }
-                if !cursor.goto_parent() {
-                    break 'outer;
-                }
-            }
-        }
     }
 
     fn enter(&mut self, node: Node<'_>) {
@@ -158,23 +178,13 @@ impl<'a> Walker<'a> {
     /// attaches to, before the main walk needs it.
     fn collect_comments(&mut self, root: Node<'_>) {
         let mut nodes = Vec::new();
-        let mut cursor = root.walk();
-        'outer: loop {
-            let node = cursor.node();
-            if Kinds::is(self.kinds.comments, node.kind()) {
+        traverse(root, |node, entering| {
+            let comment = Kinds::is(self.kinds.comments, node.kind());
+            if entering && comment {
                 nodes.push(node);
-            } else if cursor.goto_first_child() {
-                continue;
             }
-            loop {
-                if cursor.goto_next_sibling() {
-                    continue 'outer;
-                }
-                if !cursor.goto_parent() {
-                    break 'outer;
-                }
-            }
-        }
+            !comment
+        });
         let mut i = 0;
         while i < nodes.len() {
             let first = nodes[i];
@@ -458,7 +468,7 @@ impl<'a> Walker<'a> {
         } else {
             Body::Other
         };
-        let (returns_value, returns_tuple) = self.returns(node, body);
+        let returns = self.returns(node, body);
         let scope = self.scopes.last();
         let function = Function {
             public: self.is_public(declaration, &name)
@@ -474,8 +484,8 @@ impl<'a> Walker<'a> {
             header,
             header_span,
             params: params.clone(),
-            returns_value,
-            returns_tuple,
+            returns_value: returns.value,
+            returns_tuple: returns.tuple,
             statements: u32::try_from(statements.len()).unwrap_or(u32::MAX),
             body: body_shape,
             doc,
@@ -620,9 +630,9 @@ impl<'a> Walker<'a> {
         }
     }
 
-    /// `(returns_value, returns_tuple)` from the declared return type, the body's
-    /// `return` statements, or an expression body.
-    fn returns(&self, node: Node<'_>, body: Node<'_>) -> (bool, bool) {
+    /// What a function returns, from its declared return type, the `return`
+    /// statements of its body (not of functions nested in it), or an expression body.
+    fn returns(&self, node: Node<'_>, body: Node<'_>) -> Returns {
         let declared = node
             .child_by_field_name("return_type")
             .map(|t| self.text(t).trim_start_matches(':').trim());
@@ -639,16 +649,16 @@ impl<'a> Walker<'a> {
             )
         });
         if !Kinds::is(self.kinds.blocks, body.kind()) && body.kind() != "compound_statement" {
-            return (true, tuple || body.kind() == "array");
+            return Returns {
+                value: true,
+                tuple: tuple || body.kind() == "array",
+            };
         }
         let mut returns_expression = false;
-        let mut cursor = body.walk();
-        'outer: loop {
-            let current = cursor.node();
-            let nested_function = current != body
-                && (Kinds::is(self.kinds.functions, current.kind())
-                    || Kinds::is(self.kinds.lambdas, current.kind())
-                    || current.kind() == "closure_expression");
+        traverse(body, |current, entering| {
+            if !entering {
+                return false;
+            }
             if Kinds::is(self.kinds.returns, current.kind()) {
                 if let Some(returned) = current.named_child(0) {
                     returns_expression = true;
@@ -657,25 +667,19 @@ impl<'a> Walker<'a> {
                         "expression_list" | "tuple_expression" | "tuple"
                     );
                 }
-            } else if !nested_function && cursor.goto_first_child() {
-                continue;
+                return false;
             }
-            loop {
-                if cursor.node() == body {
-                    break 'outer;
-                }
-                if cursor.goto_next_sibling() {
-                    continue 'outer;
-                }
-                if !cursor.goto_parent() {
-                    break 'outer;
-                }
-            }
+            let kind = current.kind();
+            current == body
+                || !(Kinds::is(self.kinds.functions, kind)
+                    || Kinds::is(self.kinds.lambdas, kind)
+                    || Kinds::is(self.kinds.closures, kind))
+        });
+        Returns {
+            // A Rust block's tail expression is a return with no `return`.
+            value: declared_value || (self.lang != Lang::Rust && returns_expression),
+            tuple,
         }
-        if self.lang == Lang::Rust {
-            return (declared_value, tuple);
-        }
-        (declared_value || returns_expression, tuple)
     }
 
     // --- Calls ----------------------------------------------------------------
@@ -1087,7 +1091,7 @@ fn span_of(node: Node<'_>) -> Span {
 /// True for type text naming a mutable collection: `string[]`, `Map<K, V>`,
 /// `list[int]`, `array`, `Vec<T>`, `HashMap<K, V>` and similar.
 fn is_collection_type(text: &str) -> bool {
-    const COLLECTIONS: [&str; 22] = [
+    const COLLECTIONS: [&str; 21] = [
         "Array",
         "ReadonlyArray",
         "Map",
@@ -1099,7 +1103,6 @@ fn is_collection_type(text: &str) -> bool {
         "set",
         "List",
         "Dict",
-        "Set",
         "array",
         "Collection",
         "Vec",

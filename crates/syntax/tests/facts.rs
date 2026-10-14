@@ -361,3 +361,17 @@ fn unsupported_and_generated_files_are_skipped() {
     assert!(parse("types.d.ts", "declare const x: number;").is_none());
     assert!(parse("bundle.min.js", "a()").is_none());
 }
+
+#[test]
+fn a_return_inside_a_closure_is_not_the_function_returning() {
+    let php = facts(
+        "src/a.php",
+        "<?php\nfunction run($xs) { array_map(function ($x) { return $x; }, $xs); }\n",
+    );
+    assert!(!function(&php, "run").returns_value);
+    let ts = facts(
+        "src/a.ts",
+        "function run(xs) { xs.map(function (x) { return x; }); }\n",
+    );
+    assert!(!function(&ts, "run").returns_value);
+}

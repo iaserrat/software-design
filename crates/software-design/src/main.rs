@@ -107,13 +107,7 @@ fn check(args: &[String]) -> Result<ExitCode, Failure> {
         };
         match arg.as_str() {
             "--tier" => {
-                request.tier = match value("--tier")?.as_str() {
-                    "A" | "a" => Tier::A,
-                    "B" | "b" => Tier::B,
-                    other => {
-                        return Err(Usage(format!("--tier must be A or B, not {other}")).into());
-                    }
-                };
+                request.tier = value("--tier")?.parse().map_err(Usage)?;
             }
             "--diff" => request.lines = Lines::AddedSince(None),
             "--base" => request.lines = Lines::AddedSince(Some(value("--base")?)),

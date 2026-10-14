@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use history::Repo;
 use rules::{Finding, Tier};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::analysis::{self, DEFAULT_SINCE, Lines, Request};
@@ -192,7 +193,10 @@ pub(crate) fn run(event: &str, input: &str) -> Result<Option<Value>, String> {
         "session-start" => {
             Session::prune();
             if let (Some(state), Ok(Some(head))) = (&state, repo.head()) {
-                state.save(&json!({ "base": head, "reported": [] }));
+                state.save(&State {
+                    base: Some(head),
+                    reported: BTreeSet::new(),
+                });
             }
             Ok(None)
         }
@@ -237,23 +241,14 @@ fn post_edit(
     }
     let mut saved = state.map(Session::load).unwrap_or_default();
     let findings = session_findings(repo, &saved, paths)?;
-    let mut reported: BTreeSet<String> = saved["reported"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default();
     let fresh: Vec<&Finding> = findings
         .iter()
-        .filter(|f| reported.insert(key(f)))
+        .filter(|f| saved.reported.insert(key(f)))
         .collect();
     if fresh.is_empty() {
         return Ok(None);
     }
     if let Some(state) = state {
-        saved["reported"] = json!(reported);
         state.save(&saved);
     }
     // software-design-allow: repeated-code this message and the stop message share a shape, not logic
@@ -286,12 +281,12 @@ fn stop(repo: &Repo, state: Option<&Session>) -> Result<Option<Value>, String> {
 /// `HEAD` without session state), under `paths` or everywhere when empty.
 fn session_findings(
     repo: &Repo,
-    saved: &Value,
+    saved: &State,
     paths: Vec<String>,
 ) -> Result<Vec<Finding>, String> {
     let request = Request {
         paths,
-        lines: Lines::AddedSince(saved["base"].as_str().map(str::to_owned)),
+        lines: Lines::AddedSince(saved.base.clone()),
         tier: Tier::A,
         since: DEFAULT_SINCE.to_owned(),
     };
@@ -319,8 +314,20 @@ fn list(findings: &[&Finding]) -> String {
 /// Session state older than this belongs to sessions that have ended.
 const SESSION_TTL: std::time::Duration = std::time::Duration::from_hours(720);
 
-/// Per-session state in the plugin's data directory: the base commit and the
-/// findings already reported. Absent when the plugin has no data directory.
+/// What a session remembers between hooks. A missing or unreadable file is the
+/// default: no base commit, nothing reported yet.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct State {
+    /// `HEAD` when the session started; lines added since are the session's.
+    #[serde(default)]
+    base: Option<String>,
+    /// [`key`]s of findings already reported, so each is reported once.
+    #[serde(default)]
+    reported: BTreeSet<String>,
+}
+
+/// Where a session's [`State`] lives in the plugin's data directory. Absent when
+/// the plugin has no data directory.
 struct Session {
     path: PathBuf,
 }
@@ -341,11 +348,11 @@ impl Session {
         })
     }
 
-    fn load(&self) -> Value {
+    fn load(&self) -> State {
         std::fs::read_to_string(&self.path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_else(|| json!({}))
+            .unwrap_or_default()
     }
 
     /// Deletes state files of sessions inactive for longer than [`SESSION_TTL`].
@@ -366,9 +373,12 @@ impl Session {
     }
 
     /// Writes through a temporary file so a concurrent reader never sees half a file.
-    fn save(&self, value: &Value) {
+    fn save(&self, state: &State) {
         let temp = self.path.with_extension("tmp");
-        if std::fs::write(&temp, value.to_string()).is_ok() {
+        let Ok(text) = serde_json::to_string(state) else {
+            return;
+        };
+        if std::fs::write(&temp, text).is_ok() {
             // software-design-allow: ignored-error losing state only means a finding is reported twice
             let _ = std::fs::rename(&temp, &self.path);
         }

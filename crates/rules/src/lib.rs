@@ -16,8 +16,10 @@ mod words;
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use std::str::FromStr;
 use std::sync::OnceLock;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 /// The rule table, shared with the plugin's skills.
@@ -49,12 +51,25 @@ impl Codebase {
 }
 
 /// How much evidence a detector's signal is on its own.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Tier {
     /// Precise: report as found. Every tier A detector needs only one file.
     A,
     /// A candidate: a reader must apply the rule's exemptions first.
     B,
+}
+
+/// Parses `A` or `B`, in either case, as the CLI and MCP tools accept it.
+impl FromStr for Tier {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Tier, String> {
+        match text {
+            "A" | "a" => Ok(Tier::A),
+            "B" | "b" => Ok(Tier::B),
+            other => Err(format!("tier must be A or B, not {other}")),
+        }
+    }
 }
 
 /// Lines added per path, as returned by `history::Repo::added_lines`.
@@ -86,7 +101,7 @@ pub struct Finding {
 }
 
 /// A detector's entry in `rules.json`.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Detector {
     pub id: String,
     /// The red flag or principle id this detector gives evidence for.
@@ -99,19 +114,15 @@ pub struct Detector {
 /// # Panics
 /// When the bundled `rules.json` is malformed, which the crate's tests rule out.
 pub fn detectors() -> &'static [Detector] {
+    #[derive(Deserialize)]
+    struct Table {
+        detectors: Vec<Detector>,
+    }
     static DETECTORS: OnceLock<Vec<Detector>> = OnceLock::new();
     DETECTORS.get_or_init(|| {
-        let table: Value = serde_json::from_str(RULES_JSON).expect("rules.json is valid JSON");
-        table["detectors"]
-            .as_array()
-            .expect("rules.json has a detectors array")
-            .iter()
-            .map(|d| Detector {
-                id: d["id"].as_str().expect("detector id").to_owned(),
-                flags: d["flags"].as_str().expect("detector flags").to_owned(),
-                tier: if d["tier"] == "A" { Tier::A } else { Tier::B },
-            })
-            .collect()
+        serde_json::from_str::<Table>(RULES_JSON)
+            .expect("rules.json matches `Detector`")
+            .detectors
     })
 }
 
@@ -168,7 +179,7 @@ pub fn report(findings: &[Finding]) -> Value {
             json!({
                 "rule": f.rule,
                 "flags": d.flags,
-                "tier": if d.tier == Tier::A { "A" } else { "B" },
+                "tier": d.tier,
                 "path": f.path,
                 "line": f.line,
                 "symbol": f.symbol,

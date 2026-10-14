@@ -463,6 +463,7 @@ name = "rules"
 version = "0.0.0"
 dependencies = [
  "history",
+ "serde",
  "serde_json",
  "syntax",
 ]

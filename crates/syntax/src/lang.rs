@@ -1,5 +1,5 @@
-//! What each grammar calls things. This is the only file that knows node kind
-//! names; adding a language means adding a variant and filling in these tables.
+//! Node kinds by the role they play in the fact model. Construct shapes (field
+//! names) live in `walk.rs`: a new language fills these tables and its arms there.
 
 use tree_sitter::Language;
 

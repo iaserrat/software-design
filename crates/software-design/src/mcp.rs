@@ -65,16 +65,11 @@ tier, path, line, message and evidence, ordered by how often the file changes.",
         &self,
         Parameters(params): Parameters<CheckParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let tier = match params.tier.as_deref() {
-            None | Some("A" | "a") => Tier::A,
-            Some("B" | "b") => Tier::B,
-            Some(other) => {
-                return Err(ErrorData::invalid_params(
-                    format!("tier must be A or B, not {other}"),
-                    None,
-                ));
-            }
-        };
+        let tier = params
+            .tier
+            .as_deref()
+            .map_or(Ok(Tier::A), str::parse)
+            .map_err(|e| ErrorData::invalid_params(e, None))?;
         let lines = match (params.base, params.changed) {
             (Some(base), _) => Lines::AddedSince(Some(base)),
             (None, true) => Lines::AddedSince(None),
