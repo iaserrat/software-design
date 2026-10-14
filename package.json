@@ -1,0 +1,13 @@
+{
+  "name": "software-design",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Design smaller, deeper software: red-flag detection, design-it-twice interface design and strategic change planning.",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "type": "module",
+  "pi": {
+    "extensions": ["./pi/index.ts"],
+    "skills": ["./skills"]
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {"query": "can you look over my branch feat/refill-requests before I open the PR? mostly worried the RefillController is getting messy", "should_trigger": true},
+  {"query": "is app/Services/CrossSellService.php well designed? it feels like every change to it touches five other files", "should_trigger": true},
+  {"query": "review the diff against main for complexity and maintainability problems", "should_trigger": true},
+  {"query": "Could a new dev use the public API in src/lib/api/eval.ts correctly without reading the implementation?", "should_trigger": true},
+  {"query": "find design red flags in crates/rules, the detectors feel tangled", "should_trigger": true},
+  {"query": "my teammate says TextDocument is just a wrapper around TextArea and adds nothing. is that a real problem? files are src/textDocument.ts and src/textArea.ts", "should_trigger": true},
+  {"query": "check composables/chat for shallow one-line functions, copy-pasted blocks, that kind of thing", "should_trigger": true},
+  {"query": "Do a design review of the payments module, we're about to build three features on top of it", "should_trigger": true},
+  {"query": "is helpers/format.py overcomplicated? it has like 30 tiny functions and I can never find the right one", "should_trigger": true},
+  {"query": "PR 812 touches the hooks module, can you review it for code quality before I approve", "should_trigger": true},
+  {"query": "review my essay about burnout in healthcare for grammar and flow", "should_trigger": false},
+  {"query": "audit our entire monorepo and tell me where design investment would pay off most this quarter", "should_trigger": false},
+  {"query": "run the test suite and fix whatever fails", "should_trigger": false},
+  {"query": "why is this query slow? EXPLAIN ANALYZE shows a seq scan on prescriptions with 4M rows", "should_trigger": false},
+  {"query": "write docstrings for every function in utils/dates.py", "should_trigger": false},
+  {"query": "design the interface for a new Notification module that sends sms and email", "should_trigger": false},
+  {"query": "check the auth controller for security vulnerabilities like SQL injection or IDOR", "should_trigger": false},
+  {"query": "what does this regex do: ^(?=.*\\d).{8,}$", "should_trigger": false},
+  {"query": "review the figma mockups for the new onboarding flow and tell me if the spacing is consistent", "should_trigger": false},
+  {"query": "bump axios to the latest version and make sure nothing breaks", "should_trigger": false}
+]

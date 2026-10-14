@@ -1,0 +1,22 @@
+[
+  {"query": "i need a little class to manage retry state for our webhook sender (attempt count, next delay, give up after N). before i write it can you help me figure out what methods it should expose?", "should_trigger": true},
+  {"query": "We're adding a pricing engine under app/Pricing that has to handle coupons, bundles and tax per province. How would you structure the module so the checkout controller doesn't need to know any of that?", "should_trigger": true},
+  {"query": "Sketch the public API for a rate limiter crate in rust, token bucket per user id, I want it simple to call from axum handlers", "should_trigger": true},
+  {"query": "what should the interface look like for a TS client that wraps our /v2/orders REST endpoints? there are 14 endpoints and the frontend calls maybe 5 of them", "should_trigger": true},
+  {"query": "Design it twice: a cache layer for the lab results service, either a per-request memo or a shared TTL cache. Which one and what's its interface?", "should_trigger": true},
+  {"query": "planning a new python module that parses HL7 messages into our Patient model. what classes/functions do I need and how should they fit together", "should_trigger": true},
+  {"query": "help me design the composable for the cart drawer in our nuxt app: what it returns, what state it owns, what the components call", "should_trigger": true},
+  {"query": "I'm about to split UserService.php (2k lines) into smaller pieces. Which parts should become their own module and what would each one's interface be?", "should_trigger": true},
+  {"query": "need an abstraction for sending notifications over sms, email and push. how do I shape it so adding whatsapp later isn't a nightmare", "should_trigger": true},
+  {"query": "our feature flag client has 40 static methods like enableLongevitySimplifiedCheckout(). what would a cleaner API for it look like before I rewrite it?", "should_trigger": true},
+  {"query": "Design a landing page for our menopause program with a hero image and three benefit cards", "should_trigger": false},
+  {"query": "fix the TypeError in src/cart/useCart.ts line 88: cannot read properties of undefined (reading 'items')", "should_trigger": false},
+  {"query": "Write unit tests for the existing RateLimiter struct in crates/limiter/src/lib.rs", "should_trigger": false},
+  {"query": "explain the strategy design pattern with a short example", "should_trigger": false},
+  {"query": "Draw an ERD for orders, order_items and refunds tables in our postgres schema", "should_trigger": false},
+  {"query": "rename getUserData to fetchUserProfile across the repo and update the imports", "should_trigger": false},
+  {"query": "Review the code in src/billing for design problems before I merge the branch", "should_trigger": false},
+  {"query": "design a logo for our internal tool called janus, something with two faces", "should_trigger": false},
+  {"query": "how do I configure retry and timeout options for the boto3 S3 client?", "should_trigger": false},
+  {"query": "add a limit parameter to the existing listOrders(cursor) function in api/orders.ts and update the two callers", "should_trigger": false}
+]

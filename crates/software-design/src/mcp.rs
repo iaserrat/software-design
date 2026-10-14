@@ -1,0 +1,175 @@
+//! The MCP server: `check` and `interface` as typed tools over stdio.
+//!
+//! Agents get exactly these tools and nothing else when they must not read
+//! implementations, such as the cold-reader agent, which may see interfaces only.
+
+use std::path::PathBuf;
+
+use history::Repo;
+use rmcp::handler::server::wrapper::Parameters;
+use rmcp::model::{CallToolResult, ContentBlock, ServerCapabilities, ServerConfig};
+use rmcp::{ErrorData, ServerHandler, ServiceExt, schemars, tool, tool_handler, tool_router};
+use rules::Tier;
+use serde::Deserialize;
+
+use crate::analysis::{self, DEFAULT_SINCE, Lines, Request};
+
+const INSTRUCTIONS: &str = "Design red flags in code. `check` returns findings; tier A findings \
+are precise, tier B findings are candidates to verify against the exemptions in rules.json. `interface` returns signatures and interface comments without bodies.";
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct CheckParams {
+    /// Repository-relative files or directories to report on. Empty: the whole repository.
+    #[serde(default)]
+    paths: Vec<String>,
+    /// Report only lines changed since this commit (for example `main` or `HEAD~3`).
+    #[serde(default)]
+    base: Option<String>,
+    /// Report only lines changed since HEAD, including uncommitted work. Ignored when `base` is set.
+    #[serde(default)]
+    changed: bool,
+    /// "A" for precise findings only (fast, file-local); "B" to add candidates (whole repository and git history).
+    #[serde(default)]
+    tier: Option<String>,
+    /// Directory inside the repository; defaults to the server's working directory.
+    #[serde(default)]
+    directory: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct InterfaceParams {
+    /// Repository-relative files or directories whose public interface to print.
+    paths: Vec<String>,
+    /// Directory inside the repository; defaults to the server's working directory.
+    #[serde(default)]
+    directory: Option<String>,
+}
+
+#[derive(Debug)]
+struct Server {
+    /// Set when the host starts the server outside the project, as Codex does: it
+    /// runs plugin servers from the plugin root, which is not the repository to analyse.
+    require_directory: bool,
+}
+
+#[tool_router]
+impl Server {
+    #[tool(
+        description = "Find design red flags: shallow modules, pass-through methods, information leakage, \
+repeated code, comments that repeat code, vague names, ignored errors. Returns JSON findings with rule, \
+tier, path, line, message and evidence, ordered by how often the file changes.",
+        // Read-only lets hosts that gate tools on annotations, such as Codex, run it unprompted.
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn check(
+        &self,
+        Parameters(params): Parameters<CheckParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let tier = match params.tier.as_deref() {
+            None | Some("A" | "a") => Tier::A,
+            Some("B" | "b") => Tier::B,
+            Some(other) => {
+                return Err(ErrorData::invalid_params(
+                    format!("tier must be A or B, not {other}"),
+                    None,
+                ));
+            }
+        };
+        let lines = match (params.base, params.changed) {
+            (Some(base), _) => Lines::AddedSince(Some(base)),
+            (None, true) => Lines::AddedSince(None),
+            (None, false) => Lines::All,
+        };
+        let request = Request {
+            paths: params.paths,
+            lines,
+            tier,
+            since: DEFAULT_SINCE.to_owned(),
+        };
+        let directory = self.directory(params.directory)?;
+        blocking(directory, move |repo| {
+            let findings = analysis::check(&repo, &request)?;
+            Ok(analysis::report(&repo, &findings).to_string())
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Print the public interface of files or directories: each public type and function with \
+its signature and interface comment, without bodies.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn interface(
+        &self,
+        Parameters(params): Parameters<InterfaceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let directory = self.directory(params.directory)?;
+        blocking(directory, move |repo| {
+            analysis::interface(&repo, &params.paths)
+        })
+        .await
+    }
+}
+
+impl Server {
+    fn directory(&self, directory: Option<String>) -> Result<Option<String>, ErrorData> {
+        if self.require_directory && directory.is_none() {
+            return Err(ErrorData::invalid_params(
+                "pass `directory`: the absolute path of the repository to analyse",
+                None,
+            ));
+        }
+        Ok(directory)
+    }
+}
+
+// The macro generates async trait methods that do not await.
+#[allow(
+    clippy::unused_async_trait_impl,
+    reason = "generated by rmcp's tool_handler macro"
+)]
+#[tool_handler]
+impl ServerHandler for Server {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_instructions(INSTRUCTIONS)
+    }
+}
+
+/// Runs analysis off the async runtime and turns its result into a tool result.
+/// Analysis errors are tool errors the model can read, not protocol errors.
+async fn blocking(
+    directory: Option<String>,
+    work: impl FnOnce(Repo) -> Result<String, String> + Send + 'static,
+) -> Result<CallToolResult, ErrorData> {
+    let outcome = tokio::task::spawn_blocking(move || {
+        let dir = directory.map_or_else(
+            || std::env::current_dir().unwrap_or_default(),
+            PathBuf::from,
+        );
+        let repo = Repo::discover(&dir).map_err(|e| format!("not inside a git repository: {e}"))?;
+        work(repo)
+    })
+    .await
+    .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+    Ok(match outcome {
+        Ok(text) => CallToolResult::success(vec![ContentBlock::text(text)]),
+        Err(message) => CallToolResult::error(vec![ContentBlock::text(message)]),
+    })
+}
+
+/// Serves the tools over stdin and stdout until the client disconnects.
+pub(crate) fn serve(require_directory: bool) -> Result<(), String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?;
+    runtime.block_on(async {
+        let server = Server { require_directory }
+            .serve(rmcp::transport::stdio())
+            .await
+            .map_err(|e| e.to_string())?;
+        server.waiting().await.map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}

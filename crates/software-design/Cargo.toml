@@ -1,0 +1,25 @@
+[package]
+name = "software-design"
+version = "0.1.0"
+description = "Finds design red flags in TypeScript, JavaScript, React, Vue, Python, PHP and Rust code."
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+syntax.workspace = true
+history.workspace = true
+rules.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rmcp.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,392 @@
+{
+  "principles": [
+    {
+      "id": "complexity-is-incremental",
+      "summary": "Complexity arrives as many small dependencies and obscurities, so each small one matters."
+    },
+    {
+      "id": "working-code-is-not-enough",
+      "summary": "The goal is a good design that also works; adding complexity to finish a task faster is not acceptable."
+    },
+    {
+      "id": "invest-continually",
+      "summary": "Spend a steady 10-20% of development time improving the design, in small increments."
+    },
+    {
+      "id": "deep-modules",
+      "summary": "The best modules hide a lot of functionality behind a small interface."
+    },
+    {
+      "id": "simple-common-case",
+      "summary": "Design interfaces so the most common use is the simplest one; rarely used options should not cost common callers anything."
+    },
+    {
+      "id": "information-hiding",
+      "summary": "Each module should own a few design decisions that no other module needs to know."
+    },
+    {
+      "id": "simple-interface-over-simple-implementation",
+      "summary": "When complexity is unavoidable, the module should absorb it so its users do not have to."
+    },
+    {
+      "id": "somewhat-general-purpose",
+      "summary": "Build only the functionality needed today, behind an interface that does not encode today's single caller."
+    },
+    {
+      "id": "separate-general-and-special",
+      "summary": "Keep a general mechanism free of code for one particular use; put that code with the use."
+    },
+    {
+      "id": "different-layer-different-abstraction",
+      "summary": "Adjacent layers should offer different abstractions; layers that mirror each other add interfaces without adding function."
+    },
+    {
+      "id": "pull-complexity-down",
+      "summary": "Handle hard cases inside the module instead of exporting them as exceptions or configuration."
+    },
+    {
+      "id": "define-errors-out-of-existence",
+      "summary": "Define operations so that the normal behaviour covers the cases that would otherwise be errors; failing that, mask errors low or aggregate their handling high."
+    },
+    {
+      "id": "design-it-twice",
+      "summary": "Sketch two or more substantially different designs before choosing one."
+    },
+    {
+      "id": "comments-describe-the-non-obvious",
+      "summary": "Comments carry what the code cannot say: abstractions, units, boundaries, invariants and reasons."
+    },
+    {
+      "id": "design-for-reading",
+      "summary": "Optimise code for the people who read it, not for the person who writes it."
+    },
+    {
+      "id": "increments-are-abstractions",
+      "summary": "Grow a system one well-designed abstraction at a time, not one feature hack at a time."
+    },
+    {
+      "id": "consistency",
+      "summary": "Do similar things the same way and different things differently; follow existing conventions over personal preference."
+    },
+    {
+      "id": "measure-before-optimising",
+      "summary": "Measure before changing code for speed, and keep only changes that measurably help or simplify."
+    }
+  ],
+  "red_flags": [
+    {
+      "id": "shallow-module",
+      "name": "Shallow Module",
+      "summary": "The interface is nearly as complicated as the implementation it hides.",
+      "ask": "What does a caller avoid learning by using this instead of the code inside it?"
+    },
+    {
+      "id": "information-leakage",
+      "name": "Information Leakage",
+      "summary": "One design decision is reflected in several modules, so changing it means changing all of them.",
+      "ask": "Which single module could own this knowledge?"
+    },
+    {
+      "id": "temporal-decomposition",
+      "name": "Temporal Decomposition",
+      "summary": "Modules follow the order operations happen in instead of the knowledge each one needs.",
+      "ask": "What knowledge does each step need, and do two steps need the same knowledge?"
+    },
+    {
+      "id": "overexposure",
+      "name": "Overexposure",
+      "summary": "Common use of an API requires learning about rarely used features.",
+      "ask": "Could the common call work with a default?"
+    },
+    {
+      "id": "pass-through-method",
+      "name": "Pass-Through Method",
+      "summary": "A method only forwards its arguments to another method with a similar signature.",
+      "ask": "Which class is responsible for this feature, and should callers reach it directly?"
+    },
+    {
+      "id": "repetition",
+      "name": "Repetition",
+      "summary": "Nontrivial code appears in several places.",
+      "ask": "What abstraction would make this code exist once?"
+    },
+    {
+      "id": "special-general-mixture",
+      "name": "Special-General Mixture",
+      "summary": "A general mechanism contains code for one particular use of it.",
+      "ask": "Can the special-purpose part move up to the code that needs it?"
+    },
+    {
+      "id": "conjoined-methods",
+      "name": "Conjoined Methods",
+      "summary": "Two pieces of code can only be understood by reading both.",
+      "ask": "Should these be one method, or is the split in the wrong place?"
+    },
+    {
+      "id": "comment-repeats-code",
+      "name": "Comment Repeats Code",
+      "summary": "A comment says only what the adjacent code already says.",
+      "ask": "What does a reader need that the code does not show: units, boundaries, reasons?"
+    },
+    {
+      "id": "implementation-contaminates-interface",
+      "name": "Implementation Documentation Contaminates Interface",
+      "summary": "An interface comment describes internals that callers do not need.",
+      "ask": "What must a caller know to use this, and nothing more?"
+    },
+    {
+      "id": "vague-name",
+      "name": "Vague Name",
+      "summary": "A name could refer to many things, so readers guess, and guess wrong.",
+      "ask": "Seen alone, what would a reader guess this name holds?"
+    },
+    {
+      "id": "hard-to-pick-name",
+      "name": "Hard to Pick Name",
+      "summary": "No short precise name fits, which suggests the thing has no clean definition.",
+      "ask": "Is this one thing or several things sharing a variable?"
+    },
+    {
+      "id": "hard-to-describe",
+      "name": "Hard to Describe",
+      "summary": "A complete description of a method or variable needs a long comment.",
+      "ask": "What would make the full description short?"
+    },
+    {
+      "id": "nonobvious-code",
+      "name": "Nonobvious Code",
+      "summary": "A quick read does not reveal what the code does or means.",
+      "ask": "What information is the reader missing, and where should it live?"
+    }
+  ],
+  "detectors": [
+    {
+      "id": "pass-through-method",
+      "flags": "pass-through-method",
+      "tier": "A",
+      "scope": "file",
+      "signal": "The body is one call that passes the function's own parameters, in order, to a method of the same name on another object.",
+      "exempt": [
+        "The method implements an interface or overrides a parent: checked by the binary.",
+        "A dispatcher chooses among callees: impossible with a one-statement body.",
+        "The call goes to super/parent, which is inheritance, not delegation: checked by the binary."
+      ],
+      "fix": [
+        "Let callers use the lower object directly.",
+        "Move the feature so each class has distinct responsibilities.",
+        "Merge the two classes when they cannot be separated."
+      ]
+    },
+    {
+      "id": "comment-repeats-code",
+      "flags": "comment-repeats-code",
+      "tier": "A",
+      "scope": "file",
+      "signal": "Every content word (at least two) of the comment, or of a doc comment's first paragraph, also appears in the identifiers of the code it describes. String literal contents do not count as code.",
+      "exempt": [
+        "Tool directives, license headers and section markers: checked by the binary.",
+        "Test files are skipped."
+      ],
+      "fix": [
+        "Delete the comment.",
+        "Replace it with what the code does not say: units, boundary inclusivity, invariants, the reason the code exists."
+      ]
+    },
+    {
+      "id": "interface-mentions-private",
+      "flags": "implementation-contaminates-interface",
+      "tier": "A",
+      "scope": "file",
+      "signal": "The interface comment of a public function or type names a private field, function or constant of the same file.",
+      "exempt": [
+        "The private name is also a public concept with the same spelling: verify by reading."
+      ],
+      "fix": [
+        "Describe the behaviour a caller observes; move implementation notes inside the body."
+      ]
+    },
+    {
+      "id": "result-without-return",
+      "flags": "vague-name",
+      "tier": "B",
+      "scope": "file",
+      "signal": "A variable named `result` lives in a function that returns nothing.",
+      "exempt": [
+        "The variable holds the result of the call on the line that declares it and is read right away: verify by reading.",
+        "Test files are skipped."
+      ],
+      "fix": [
+        "Name the variable after what it holds, such as `mergedLine` or `totalChars`."
+      ]
+    },
+    {
+      "id": "exposed-collection",
+      "flags": "information-leakage",
+      "tier": "A",
+      "scope": "file",
+      "signal": "A public method returns a private collection field (list, map, set, Vec, array) of its own object.",
+      "exempt": [
+        "The type is a plain data record whose fields are its interface: verify by reading."
+      ],
+      "fix": [
+        "Offer the operations callers need (`getParameter(name)`) instead of the container."
+      ]
+    },
+    {
+      "id": "stale-interface-comment",
+      "flags": "nonobvious-code",
+      "tier": "A",
+      "scope": "diff",
+      "signal": "A change edited a function's signature while leaving its interface comment untouched.",
+      "exempt": [
+        "The comment still describes the new signature completely: verify by reading."
+      ],
+      "fix": [
+        "Update the interface comment in the same change."
+      ]
+    },
+    {
+      "id": "shallow-function",
+      "flags": "shallow-module",
+      "tier": "B",
+      "scope": "repo",
+      "signal": "A function of one statement and at most three lines that is called from exactly one place in the repository.",
+      "exempt": [
+        "The function implements an interface or overrides a parent: checked by the binary.",
+        "The name hides a decision the caller should not know: verify by reading.",
+        "Framework entry points invoked by name from outside the code: verify by reading."
+      ],
+      "fix": [
+        "Inline it at its only caller."
+      ]
+    },
+    {
+      "id": "ignored-error",
+      "flags": "define-errors-out-of-existence",
+      "tier": "B",
+      "scope": "repo",
+      "signal": "An error handler discards the error of one call: an empty catch, `except: pass`, `let _ = f()` or `f().ok();`. One discard is enough to report. When several sites discard the same callee, the fix belongs in the callee's definition.",
+      "exempt": [
+        "The callee must report this error to other callers: verify by reading.",
+        "The discarded value is not an error: verify by reading."
+      ],
+      "fix": [
+        "Redefine the callee so this case is normal behaviour.",
+        "Mask the error inside the callee.",
+        "If the error matters, handle it."
+      ]
+    },
+    {
+      "id": "repeated-code",
+      "flags": "repetition",
+      "tier": "B",
+      "scope": "repo",
+      "signal": "Statements of three or more code lines appear in two or more places with the same structure, names and literals aside.",
+      "exempt": [
+        "Snippets of one or two lines are not reported: checked by the binary.",
+        "Extraction would need a long parameter list; the finding reports the identifier count.",
+        "Test files are skipped."
+      ],
+      "fix": [
+        "Extract a function with a simple signature.",
+        "Restructure so the code runs in one place."
+      ]
+    },
+    {
+      "id": "constant-argument",
+      "flags": "overexposure",
+      "tier": "B",
+      "scope": "repo",
+      "signal": "Every call site of a function (at least three) passes the same literal in the same position.",
+      "exempt": [
+        "The parameter exists for tests or for a known upcoming caller: verify by asking."
+      ],
+      "fix": [
+        "Give the parameter a default or remove it."
+      ]
+    },
+    {
+      "id": "hidden-coupling",
+      "flags": "information-leakage",
+      "tier": "B",
+      "scope": "repo",
+      "signal": "Two source files changed together in at least three commits and in at least half the commits of the less active file, yet neither imports the other nor calls a function the other defines.",
+      "exempt": [
+        "A test and the file it tests.",
+        "A shared reason the code already documents in one place."
+      ],
+      "fix": [
+        "Move the shared decision into one module.",
+        "If it cannot move, document it where both sides will see it."
+      ]
+    },
+    {
+      "id": "vague-name",
+      "flags": "vague-name",
+      "tier": "B",
+      "scope": "file",
+      "signal": "A generic name (`data`, `info`, `tmp`, `value`, `status`, a single letter) is used more than 25 lines away from its declaration.",
+      "exempt": [
+        "Short loop indices whose whole range is visible.",
+        "Names the codebase uses consistently for one thing."
+      ],
+      "fix": [
+        "Choose a name that says what the value is."
+      ]
+    },
+    {
+      "id": "tuple-return",
+      "flags": "nonobvious-code",
+      "tier": "B",
+      "scope": "file",
+      "signal": "A public function returns a tuple, so callers read its parts by position instead of by name.",
+      "exempt": [
+        "The parts are named at every use by destructuring: verify by reading."
+      ],
+      "fix": [
+        "Return a small named type whose fields say what each part is."
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "text": "What is the simplest interface that covers every current need?"
+    },
+    {
+      "text": "In how many situations will this method be used?"
+    },
+    {
+      "text": "Is this API easy to use for the needs we have today?"
+    },
+    {
+      "text": "Does a caller need to know this to use the module?"
+    },
+    {
+      "text": "Can callers choose a better value for this setting than the module can compute itself?"
+    },
+    {
+      "text": "What is this code trying to do, and what is the simplest statement that explains all of it?"
+    },
+    {
+      "text": "Could someone who has never seen the code write this comment by reading the code next to it?"
+    },
+    {
+      "text": "Seen in isolation, how close would a reader's guess about this name be?"
+    },
+    {
+      "text": "Is this split by the knowledge each part needs, or by the order things happen?"
+    },
+    {
+      "text": "Do these pieces share information, get used together in both directions, overlap conceptually, or need each other to be understood?"
+    },
+    {
+      "text": "If the system had been designed with this change in mind from the start, what would it look like?"
+    },
+    {
+      "text": "Is there new information the old convention lacked, and is the new way worth updating every old use?"
+    },
+    {
+      "text": "Which alternatives did we consider, and what would make a better one than all of them?"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+[package]
+name = "rules"
+version = "0.0.0"
+description = "Design rules about module depth, information hiding, naming, comments and errors, applied to extracted facts."
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+syntax.workspace = true
+history.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]

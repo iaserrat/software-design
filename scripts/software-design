@@ -1,0 +1,121 @@
+#!/bin/sh
+# Builds and runs the software-design binary for this plugin version.
+#
+#   scripts/software-design install   build this plugin's source into ~/.software-design
+#   scripts/software-design install --detach   the same, in a new session, returning at once
+#   scripts/software-design <args>    run that build
+#
+# The plugin ships source, not binaries: each machine compiles its own, so there
+# is nothing to sign or notarize. A SessionStart hook runs `install --detach`: hosts
+# may kill a hook's process group when they exit (`codex exec` does), so the build
+# runs in its own session. It does nothing when the installed binary is current,
+# and rebuilds after the plugin updates.
+#
+# Which binary runs: $SOFTWARE_DESIGN_BIN when set; target/release/software-design
+# when this plugin is a source checkout with a build; otherwise the installed one,
+# and only when it reports this version and was built from this plugin directory.
+# A hook never fails because the binary is missing: it prints nothing, and
+# session-start says why once.
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+home="${SOFTWARE_DESIGN_HOME:-$HOME/.software-design}"
+bin="$home/bin/software-design"
+lock="$home/build.lock"
+# The plugin directory the binary was built from. Each plugin version installs to
+# its own directory, so a change here means new source even without a new version.
+source_stamp="$home/source"
+version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/crates/software-design/Cargo.toml" | head -n 1)
+
+# A build holds the lock while its process, recorded in the lock, is alive. A lock
+# without a pid is a build that is just starting, or one from before pids; it
+# counts for an hour.
+building() {
+  [ -d "$lock" ] || return 1
+  if [ -f "$lock/pid" ]; then
+    kill -0 "$(cat "$lock/pid")" 2>/dev/null
+  else
+    [ -z "$(find "$lock" -maxdepth 0 -mmin +60 2>/dev/null)" ]
+  fi
+}
+
+current() {
+  [ -x "$bin" ] &&
+    [ "$("$bin" --version 2>/dev/null)" = "software-design $version" ] &&
+    [ "$(cat "$source_stamp" 2>/dev/null)" = "$root" ]
+}
+
+install() {
+  if current; then
+    return 0
+  fi
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "software-design: building needs Rust. Install it from https://rustup.rs, then run: $0 install" >&2
+    return 1
+  fi
+  mkdir -p "$home"
+  # One build at a time; a lock left by a killed build is removed.
+  if ! building; then
+    rm -rf "$lock"
+  fi
+  if ! mkdir "$lock" 2>/dev/null; then
+    echo "software-design: another build is running; see $home/build.log" >&2
+    return 0
+  fi
+  trap 'rm -rf "$lock"' EXIT INT TERM
+  echo "$$" >"$lock/pid"
+  echo "software-design: building $version into $home; log in $home/build.log" >&2
+  if ! (cd "$root" && cargo install --locked --force --path crates/software-design --root "$home") >"$home/build.log" 2>&1; then
+    echo "software-design: the build failed; see $home/build.log" >&2
+    return 1
+  fi
+  printf '%s\n' "$root" >"$source_stamp"
+  echo "software-design: installed $bin" >&2
+}
+
+if [ "${1-}" = install ]; then
+  if [ "${2-}" = --detach ]; then
+    if command -v setsid >/dev/null 2>&1; then
+      setsid sh "$0" install </dev/null >/dev/null 2>&1 &
+    elif command -v perl >/dev/null 2>&1; then
+      perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' sh "$0" install </dev/null >/dev/null 2>&1 &
+    else
+      sh "$0" install </dev/null >/dev/null 2>&1 &
+    fi
+    exit 0
+  fi
+  install
+  exit
+fi
+
+if [ -n "${SOFTWARE_DESIGN_BIN-}" ]; then
+  exec "$SOFTWARE_DESIGN_BIN" "$@"
+fi
+if [ -x "$root/target/release/software-design" ]; then
+  exec "$root/target/release/software-design" "$@"
+fi
+# The MCP server starts with the session, while the first build may still run.
+if [ "${1-}" = mcp ]; then
+  waited=0
+  while building && [ "$waited" -lt 600 ]; do
+    sleep 2
+    waited=$((waited + 2))
+  done
+fi
+if current; then
+  exec "$bin" "$@"
+fi
+
+if [ "${1-}" = hook ]; then
+  if [ "${2-}" = session-start ]; then
+    if command -v cargo >/dev/null 2>&1; then
+      why="building $version into $home in the background (a few minutes on first install). Red-flag checks start when it finishes; then run /mcp to reconnect its tools. Log: $home/build.log"
+    else
+      why="needs Rust to build. Install it from https://rustup.rs and start a new session"
+    fi
+    printf '{"systemMessage":"software-design: %s"}\n' "$why"
+  fi
+  exit 0
+fi
+echo "software-design: version $version is not built. Run: $0 install" >&2
+exit 1

@@ -1,0 +1,30 @@
+{
+  "name": "software-design",
+  "version": "0.1.0",
+  "description": "Design smaller, deeper software: red-flag detection for TypeScript, JavaScript, React, Vue, Python, PHP and Rust, design-it-twice interface design, cold-reader interface reviews, and strategic change planning.",
+  "author": {
+    "name": "Ismael Serratos",
+    "email": "iaserrat@me.com"
+  },
+  "homepage": "https://github.com/iaserrat/software-design",
+  "repository": "https://github.com/iaserrat/software-design",
+  "license": "MIT",
+  "keywords": ["software-design", "complexity", "code-review", "refactoring", "deep-modules", "information-hiding"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": {
+    "software-design": {
+      "command": "sh",
+      "args": ["scripts/software-design", "mcp", "--require-directory"],
+      "cwd": "."
+    }
+  },
+  "interface": {
+    "displayName": "Software Design",
+    "shortDescription": "Find design red flags and design deeper modules",
+    "longDescription": "Red-flag detection ranked by git churn, design-it-twice interface design, cold-reader interface reviews, and strategic change planning.",
+    "developerName": "Ismael Serratos",
+    "category": "Coding",
+    "websiteURL": "https://github.com/iaserrat/software-design"
+  }
+}

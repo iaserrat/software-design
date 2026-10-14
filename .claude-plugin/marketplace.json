@@ -1,0 +1,17 @@
+{
+  "name": "software-design",
+  "description": "Design smaller, deeper software with Claude Code.",
+  "owner": {
+    "name": "Ismael Serratos",
+    "email": "iaserrat@me.com"
+  },
+  "plugins": [
+    {
+      "name": "software-design",
+      "source": "./",
+      "description": "Red-flag detection, design-it-twice interface design and strategic change planning.",
+      "category": "code-quality",
+      "tags": ["design", "review", "refactoring"]
+    }
+  ]
+}

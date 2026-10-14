@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+
+  plugin:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint the launcher
+        run: shellcheck -s sh scripts/software-design && shellcheck evals/*/setup.sh
+      - uses: astral-sh/setup-uv@v10.3.0
+      - name: Validate the skills against the Agent Skills specification
+        run: for skill in skills/*; do uvx --from skills-ref==0.1.1 agentskills validate "$skill"; done
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Load the pi extension
+        run: node -e "import('./pi/index.ts').then((m) => { if (typeof m.default !== 'function') process.exit(1) })"
+      - name: Validate the plugin and marketplace
+        run: |
+          npx --yes @anthropic-ai/claude-code plugin validate --strict .claude-plugin/plugin.json
+          npx --yes @anthropic-ai/claude-code plugin validate --strict .claude-plugin/marketplace.json
