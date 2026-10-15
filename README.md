@@ -14,6 +14,8 @@ It also helps the agent design new modules the way the book describes. Design it
 
 Works on TypeScript, JavaScript, React, Vue, Python, PHP and Rust.
 
+Software Design is part of [Anomic](https://anomic.dev).
+
 ---
 
 ## Why
@@ -50,7 +52,7 @@ Ask for a review, a design or an audit, and the matching skill takes over. You c
 Run one installer on macOS, Linux, or WSL:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh
+curl -fsSL https://anomic.dev/software-design | sh
 ```
 
 It detects Claude Code, Codex and pi on your `PATH`, asks which to install for, and uses their own plugin installers to download the source. It builds the shared Rust binary synchronously and checks that the MCP server exposes `check` and `interface` before reporting success. Start a new agent session when it finishes. Session hooks do not build anything.
@@ -58,13 +60,13 @@ It detects Claude Code, Codex and pi on your `PATH`, asks which to install for, 
 For unattended installation, name the agents explicitly:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh -s -- codex claude
+curl -fsSL https://anomic.dev/software-design | sh -s -- codex claude
 ```
 
 To inspect the script before running it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh -o install.sh
+curl -fsSL https://anomic.dev/software-design -o install.sh
 sh install.sh
 ```
 
