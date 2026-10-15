@@ -34,6 +34,22 @@ impl Fixture {
                 agent,
                 &format!(
                     "echo '{agent}' \"$*\" >> \"$HOME/commands\"\n\
+                     marker=\"$HOME/{agent}.installed\"\n\
+                     case \"$*\" in\n\
+                     'plugin list '*|list)\n\
+                       if [ -f \"$marker\" ]; then\n\
+                         case '{agent}' in\n\
+                         claude) echo '[{{\"id\":\"software-design@software-design\",\"scope\":\"user\"}}]' ;;\n\
+                         codex) echo '{{\"installed\":[{{\"pluginId\":\"software-design@software-design\"}}],\"available\":[]}}' ;;\n\
+                         pi) printf 'User packages:\\n  git:github.com/iaserrat/software-design\\n' ;;\n\
+                         esac\n\
+                       else echo '[]'; fi\n\
+                       exit ;;\n\
+                     'plugin install '*|'plugin add '*|'install '*) touch \"$marker\" ;;\n\
+                     'plugin update '*|'update '*)\n\
+                       [ -f \"$marker\" ] || exit 1\n\
+                       [ ! -f \"$HOME/fail-update\" ] || exit 1 ;;\n\
+                     esac\n\
                      case '{agent}' in\n\
                      claude) target=\"$CLAUDE_CONFIG_DIR/plugins/marketplaces/software-design\" ;;\n\
                      codex) target=\"$CODEX_HOME/.tmp/marketplaces/software-design\" ;;\n\
@@ -99,7 +115,7 @@ impl Fixture {
 #[test]
 fn selected_agents_share_one_build_and_reruns_refresh_without_rebuilding() {
     let fixture = Fixture::new("all", 0, true);
-    for _ in 0..2 {
+    for run in 0..2 {
         let result = fixture.run(&["claude", "codex", "pi"]);
         assert!(
             result.status.success(),
@@ -107,6 +123,30 @@ fn selected_agents_share_one_build_and_reruns_refresh_without_rebuilding() {
             String::from_utf8_lossy(&result.stderr)
         );
         assert!(String::from_utf8_lossy(&result.stdout).contains("Installation complete"));
+        let commands =
+            std::fs::read_to_string(fixture.dir.join("home/commands")).expect("commands");
+        for install in [
+            "claude plugin install software-design@software-design --scope user",
+            "codex plugin add software-design@software-design",
+            "pi install git:github.com/iaserrat/software-design",
+        ] {
+            assert_eq!(
+                commands.lines().filter(|line| *line == install).count(),
+                1,
+                "{install}"
+            );
+        }
+        for update in [
+            "claude plugin update software-design@software-design",
+            "codex plugin marketplace upgrade software-design",
+            "pi update git:github.com/iaserrat/software-design",
+        ] {
+            assert_eq!(
+                commands.lines().filter(|line| *line == update).count(),
+                run,
+                "{update}"
+            );
+        }
     }
     assert_eq!(
         std::fs::read_to_string(fixture.dir.join("home/builds")).expect("builds"),
@@ -115,6 +155,47 @@ fn selected_agents_share_one_build_and_reruns_refresh_without_rebuilding() {
     let commands = std::fs::read_to_string(fixture.dir.join("home/commands")).expect("commands");
     assert!(commands.contains("claude plugin marketplace update software-design"));
     assert!(commands.contains("codex plugin marketplace upgrade software-design"));
+}
+
+#[test]
+fn a_cached_pi_checkout_without_registration_is_installed() {
+    let fixture = Fixture::new("cached", 0, true);
+    let target = fixture
+        .dir
+        .join("custom pi/git/github.com/iaserrat/software-design");
+    std::fs::create_dir_all(target.parent().expect("parent")).expect("parent directories");
+    assert!(
+        Command::new("cp")
+            .arg("-R")
+            .arg(fixture.dir.join("template"))
+            .arg(target)
+            .status()
+            .expect("copy checkout")
+            .success()
+    );
+    let result = fixture.run(&["pi"]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let commands = std::fs::read_to_string(fixture.dir.join("home/commands")).expect("commands");
+    assert!(commands.contains("pi install git:github.com/iaserrat/software-design"));
+    assert!(!commands.contains("pi update"));
+}
+
+#[test]
+fn a_failed_update_is_not_retried_as_a_fresh_install() {
+    let fixture = Fixture::new("update-failed", 0, true);
+    assert!(fixture.run(&["pi"]).status.success());
+    std::fs::write(fixture.dir.join("home/commands"), "").expect("clear log");
+    std::fs::write(fixture.dir.join("home/fail-update"), "").expect("fail update");
+    let result = fixture.run(&["pi"]);
+    assert!(!result.status.success());
+    assert!(!String::from_utf8_lossy(&result.stdout).contains("Installation complete"));
+    let commands = std::fs::read_to_string(fixture.dir.join("home/commands")).expect("commands");
+    assert!(commands.contains("pi update git:github.com/iaserrat/software-design"));
+    assert!(!commands.contains("pi install"));
 }
 
 #[test]

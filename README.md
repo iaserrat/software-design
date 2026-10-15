@@ -50,7 +50,7 @@ Ask for a review, a design or an audit, and the matching skill takes over. You c
 Run one installer on macOS, Linux, or WSL:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh
 ```
 
 It detects Claude Code, Codex and pi on your `PATH`, asks which to install for, and uses their own plugin installers to download the source. It builds the shared Rust binary synchronously and checks that the MCP server exposes `check` and `interface` before reporting success. Start a new agent session when it finishes. Session hooks do not build anything.
@@ -58,13 +58,13 @@ It detects Claude Code, Codex and pi on your `PATH`, asks which to install for, 
 For unattended installation, name the agents explicitly:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh -s -- codex claude
+curl -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh -s -- codex claude
 ```
 
 To inspect the script before running it:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh -o install.sh
 sh install.sh
 ```
 
@@ -82,6 +82,16 @@ A cold build takes a few minutes. The binary goes to `~/.software-design/bin/sof
 ### Updates and manual installs
 
 Rerun the same installer to refresh the selected agents and build their runtime before starting a new session. If you update through an agent's plugin manager instead, run `sh scripts/software-design install` from its installed plugin directory before starting a session. A launcher refuses a binary from another release; missing-runtime hooks explain how to install it and tolerate the failure.
+
+For existing installations, the installer uses the agents' official update commands:
+
+| Agent | Update commands |
+|---|---|
+| [Claude Code](https://code.claude.com/docs/en/plugins/cli-reference#plugin-update) | `claude plugin marketplace update software-design`, then `claude plugin update software-design@software-design` |
+| [Codex](https://developers.openai.com/plugins/build/plugins#add-a-marketplace-from-the-cli) | `codex plugin marketplace upgrade software-design` refreshes the marketplace and configured plugins |
+| [pi](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/cli.md#update-pi-or-packages) | `pi update git:github.com/iaserrat/software-design` updates this package only |
+
+New installations use the install commands below. A failed update stops the installer; it does not fall back to reinstalling.
 
 The native plugin commands remain available:
 

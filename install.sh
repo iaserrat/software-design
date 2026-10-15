@@ -58,7 +58,7 @@ main() {
         if [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then
           fail "No terminal. Pass the agents explicitly: sh install.sh codex"
         fi
-        printf 'Install Software Design for %s? [Y/n] ' "$agent" >/dev/tty
+        printf 'Install or update Software Design for %s? [Y/n] ' "$agent" >/dev/tty
         IFS= read -r answer </dev/tty || fail "Selection cancelled."
         case "$answer" in
           ''|y|Y|yes|YES) agents="$agents $agent" ;;
@@ -80,11 +80,12 @@ main() {
   command -v git >/dev/null 2>&1 || fail "Install Git, then rerun."
   command -v "${CC:-cc}" >/dev/null 2>&1 || fail "Install a C compiler (macOS: xcode-select --install; Debian/Ubuntu: sudo apt install build-essential)."
 
-  echo "Installing for:$agents. Close existing agent sessions before starting a new one."
+  echo "Installing or updating for:$agents. Close existing agent sessions before starting a new one."
   for agent in $agents; do
     echo "Preparing $agent..."
     case "$agent" in
       claude)
+        plugins=$(claude plugin list --json)
         source="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/software-design"
         if [ -d "$source" ]; then
           claude plugin marketplace update software-design
@@ -92,10 +93,14 @@ main() {
           claude plugin marketplace add iaserrat/software-design
         fi
         verify "$source"
-        claude plugin install software-design@software-design --scope user
-        claude plugin update software-design@software-design --scope user
+        if printf '%s\n' "$plugins" | grep -Eq '"id"[[:space:]]*:[[:space:]]*"software-design@software-design"'; then
+          claude plugin update software-design@software-design
+        else
+          claude plugin install software-design@software-design --scope user
+        fi
         ;;
       codex)
+        plugins=$(codex plugin list --marketplace software-design --json)
         source="${CODEX_HOME:-$HOME/.codex}/.tmp/marketplaces/software-design"
         if [ -d "$source" ]; then
           codex plugin marketplace upgrade software-design
@@ -103,10 +108,24 @@ main() {
           codex plugin marketplace add iaserrat/software-design
         fi
         verify "$source"
-        codex plugin add software-design@software-design
+        # Marketplace upgrade also refreshes configured plugins; add only new installs.
+        if ! printf '%s\n' "$plugins" | grep -Eq '"pluginId"[[:space:]]*:[[:space:]]*"software-design@software-design"'; then
+          codex plugin add software-design@software-design
+        fi
         ;;
       pi)
-        pi install git:github.com/iaserrat/software-design
+        packages=$(NO_COLOR=1 pi list)
+        # pi list groups user and project packages; this installer owns user installs.
+        if printf '%s\n' "$packages" | awk '
+          /^User packages:/ { user = 1; next }
+          /^Project packages:/ { user = 0 }
+          user && $1 == "git:github.com/iaserrat/software-design" { found = 1 }
+          END { exit !found }
+        '; then
+          pi update git:github.com/iaserrat/software-design
+        else
+          pi install git:github.com/iaserrat/software-design
+        fi
         source="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/git/github.com/iaserrat/software-design"
         verify "$source"
         ;;
