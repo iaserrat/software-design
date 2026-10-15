@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- The plugin installs on Claude Code versions before 2.1.271. `hook_mode` in `/config` is now a text field; values other than `off` and `block` mean `context`.
+
 ## 0.1.0
 
 First release.
