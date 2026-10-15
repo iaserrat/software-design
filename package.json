@@ -1,6 +1,6 @@
 {
   "name": "software-design",
-  "version": "0.2.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Design smaller, deeper software: red-flag detection, design-it-twice interface design and strategic change planning.",
   "license": "MIT",
