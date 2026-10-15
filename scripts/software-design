@@ -26,6 +26,9 @@ lock="$home/build.lock"
 # its own directory, so a change here means new source even without a new version.
 source_stamp="$home/source"
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/crates/software-design/Cargo.toml" | head -n 1)
+# The version on main, fetched at most daily by `install`; session-start tells the
+# user when it is newer. Best effort: offline, nothing is said.
+latest="$home/latest"
 
 # A build holds the lock while its process, recorded in the lock, is alive. A lock
 # without a pid is a build that is just starting, or one from before pids; it
@@ -45,7 +48,25 @@ current() {
     [ "$(cat "$source_stamp" 2>/dev/null)" = "$root" ]
 }
 
+fetch_latest() {
+  [ -n "$(find "$latest" -mmin -1440 2>/dev/null)" ] && return 0
+  mkdir -p "$home"
+  curl -fsS --max-time 5 https://raw.githubusercontent.com/iaserrat/software-design/main/crates/software-design/Cargo.toml 2>/dev/null |
+    sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1 >"$latest.tmp" &&
+    [ -s "$latest.tmp" ] && mv "$latest.tmp" "$latest"
+  rm -f "$latest.tmp"
+}
+
+# Prints a session-start message when main has a newer version than this plugin.
+update_notice() {
+  new=$(cat "$latest" 2>/dev/null) || return 0
+  [ -n "$new" ] && [ "$new" != "$version" ] || return 0
+  [ "$(printf '%s\n%s\n' "$version" "$new" | sort -V | tail -n 1)" = "$new" ] || return 0
+  printf '{"systemMessage":"software-design: %s is out (you have %s). Update the plugin to get it; in Claude Code: /plugin marketplace update software-design"}\n' "$new" "$version"
+}
+
 install() {
+  fetch_latest || true
   if current; then
     return 0
   fi
@@ -103,6 +124,10 @@ if [ "${1-}" = mcp ]; then
   done
 fi
 if current; then
+  # The binary's session-start prints nothing, so this is the hook's only output.
+  if [ "${1-}" = hook ] && [ "${2-}" = session-start ]; then
+    update_notice
+  fi
   exec "$bin" "$@"
 fi
 

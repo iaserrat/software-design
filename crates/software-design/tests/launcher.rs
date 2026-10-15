@@ -1,6 +1,7 @@
 //! The plugin launcher (`scripts/software-design`) builds the plugin's source into
 //! `~/.software-design`, rebuilds when the plugin version changes, and never
-//! breaks a hook. A stub `cargo` stands in for the real build.
+//! breaks a hook. A stub `cargo` stands in for the real build, and a stub `curl`
+//! for main's manifest, which names version 99.0.0.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -35,6 +36,13 @@ impl Fixture {
         }
         std::fs::create_dir_all(dir.join("home")).expect("home");
         std::fs::create_dir_all(dir.join("stubs")).expect("stubs");
+        let curl = dir.join("stubs/curl");
+        std::fs::write(&curl, "#!/bin/sh\necho 'version = \"99.0.0\"'\n").expect("curl");
+        Command::new("chmod")
+            .arg("+x")
+            .arg(&curl)
+            .status()
+            .expect("chmod");
         if let Some(status) = cargo {
             // Logs where and how it ran, then writes a binary that reports VERSION.
             let stub = format!(
@@ -227,4 +235,18 @@ fn install_detach_returns_at_once_and_still_builds() {
     }
     assert!(fixture.installed().is_file(), "the detached build finished");
     assert_eq!(fixture.cargo_runs().len(), 1);
+}
+
+#[test]
+fn session_start_says_when_main_has_a_newer_version() {
+    let fixture = Fixture::new("update", Some(0));
+    assert!(fixture.launch(&["install"]).status.success());
+    let start = text(&fixture.launch(&["hook", "session-start"]).stdout);
+    assert!(
+        start.contains(&format!("99.0.0 is out (you have {VERSION})")),
+        "{start}"
+    );
+    std::fs::write(fixture.dir.join("home/.software-design/latest"), VERSION).expect("latest");
+    let start = text(&fixture.launch(&["hook", "session-start"]).stdout);
+    assert!(!start.contains("is out"), "{start}");
 }

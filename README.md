@@ -94,7 +94,7 @@ To build before your first session, run the launcher yourself. For Claude Code:
 sh ~/.claude/plugins/marketplaces/software-design/scripts/software-design install
 ```
 
-When the plugin updates to a new version, the next session rebuilds. The launcher won't run a binary whose version differs from the plugin's, so an old build never runs against new skills.
+When the plugin updates to a new version, the next session rebuilds. The launcher won't run a binary whose version differs from the plugin's, so an old build never runs against new skills. Once a day the launcher checks the version on `main`, and a session start tells you when a newer one is out.
 
 ## What you get
 
