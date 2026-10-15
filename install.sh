@@ -55,7 +55,9 @@ main() {
     agents=""
     for agent in claude codex pi; do
       if command -v "$agent" >/dev/null 2>&1; then
-        [ -r /dev/tty ] && [ -w /dev/tty ] || fail "No terminal. Pass the agents explicitly: sh install.sh codex"
+        if [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then
+          fail "No terminal. Pass the agents explicitly: sh install.sh codex"
+        fi
         printf 'Install Software Design for %s? [Y/n] ' "$agent" >/dev/tty
         IFS= read -r answer </dev/tty || fail "Selection cancelled."
         case "$answer" in
