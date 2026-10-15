@@ -211,10 +211,7 @@ fn hooks_and_mcp_run_the_launcher() {
                 let rest = command
                     .strip_prefix(&format!("\"{launcher}\" "))
                     .unwrap_or_else(|| panic!("{event}: {command}"));
-                assert!(
-                    rest.starts_with("hook ") || rest == "install --detach",
-                    "{event}: {rest}"
-                );
+                assert!(rest.starts_with("hook "), "{event}: {rest}");
             }
         }
     }

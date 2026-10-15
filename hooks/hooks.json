@@ -5,12 +5,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/software-design\" install --detach",
-            "async": true,
-            "timeout": 1800
-          },
-          {
-            "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/software-design\" hook session-start",
             "timeout": 30
           }

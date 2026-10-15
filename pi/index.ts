@@ -50,7 +50,6 @@ export default function softwareDesign(pi: ExtensionAPI) {
   let continued = false;
 
   pi.on("session_start", async (_event, ctx) => {
-    await launch(["install", "--detach"], "", ctx.cwd);
     const reply = await hook("session-start", { session_id: ctx.sessionManager.getSessionId() }, ctx.cwd);
     if (reply?.systemMessage) ctx.ui.notify(reply.systemMessage, "info");
   });

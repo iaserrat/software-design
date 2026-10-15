@@ -1,5 +1,5 @@
 //! The plugin launcher (`scripts/software-design`) builds the plugin's source into
-//! `~/.software-design`, rebuilds when the plugin version changes, and never
+//! `~/.software-design`, shares builds across agent directories, and never
 //! breaks a hook. A stub `cargo` stands in for the real build, and a stub `curl`
 //! for main's manifest, which names version 99.0.0.
 
@@ -150,22 +150,34 @@ fn a_build_of_another_version_is_refused_and_rebuilt() {
 }
 
 #[test]
-fn a_build_from_another_plugin_directory_is_rebuilt_even_at_the_same_version() {
+fn a_build_from_another_plugin_directory_is_shared_at_the_same_version() {
     let fixture = Fixture::new("moved", Some(0));
     assert!(fixture.launch(&["install"]).status.success());
+    // An old install's source stamp must not make the shared binary stale.
     std::fs::write(
         fixture.dir.join("home/.software-design/source"),
-        "/an/older/plugin/version\n",
+        "/old/plugin\n",
     )
-    .expect("stamp");
-    let refused = fixture.launch(&["check"]);
-    assert_eq!(
-        refused.status.code(),
-        Some(1),
-        "a binary built from other source is stale"
-    );
-    assert!(fixture.launch(&["install"]).status.success());
-    assert_eq!(fixture.cargo_runs().len(), 2);
+    .expect("old stamp");
+    let other = Fixture::new("other-agent", Some(0));
+    let result = Command::new("sh")
+        .arg(other.dir.join("plugin/scripts/software-design"))
+        .arg("install")
+        .env_clear()
+        .env(
+            "PATH",
+            format!("{}:/usr/bin:/bin", other.dir.join("stubs").display()),
+        )
+        .env("HOME", other.dir.join("home"))
+        .env(
+            "SOFTWARE_DESIGN_HOME",
+            fixture.dir.join("home/.software-design"),
+        )
+        .output()
+        .expect("other agent");
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert_eq!(fixture.cargo_runs().len(), 1);
+    assert_eq!(other.cargo_runs().len(), 0);
     assert_eq!(text(&fixture.launch(&["check"]).stdout).trim(), "ran check");
 }
 
@@ -175,7 +187,7 @@ fn without_rust_hooks_explain_once_and_never_fail() {
     let start = fixture.launch(&["hook", "session-start"]);
     assert!(start.status.success());
     assert!(
-        text(&start.stdout).contains("needs Rust to build"),
+        text(&start.stdout).contains("Run the installer"),
         "{}",
         text(&start.stdout)
     );
@@ -200,8 +212,8 @@ fn a_failed_build_points_at_its_log_and_releases_the_lock() {
     );
     let start = fixture.launch(&["hook", "session-start"]);
     assert!(
-        text(&start.stdout).contains("building"),
-        "a later session tries again"
+        text(&start.stdout).contains("Run the installer"),
+        "a later session explains how to retry"
     );
 }
 
@@ -223,18 +235,16 @@ fn a_lock_left_by_a_killed_build_does_not_block_the_next_one() {
 }
 
 #[test]
-fn install_detach_returns_at_once_and_still_builds() {
-    let fixture = Fixture::new("detach", Some(0));
-    let detach = fixture.launch(&["install", "--detach"]);
-    assert!(detach.status.success(), "{}", text(&detach.stderr));
-    for _ in 0..100 {
-        if fixture.installed().is_file() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-    assert!(fixture.installed().is_file(), "the detached build finished");
-    assert_eq!(fixture.cargo_runs().len(), 1);
+fn an_active_build_cannot_be_reported_as_a_completed_install() {
+    let fixture = Fixture::new("busy", Some(0));
+    let lock = fixture.dir.join("home/.software-design/build.lock");
+    std::fs::create_dir_all(&lock).expect("lock");
+    std::fs::write(lock.join("pid"), format!("{}\n", std::process::id())).expect("pid");
+    let install = fixture.launch(&["install"]);
+    assert!(!install.status.success());
+    assert!(text(&install.stderr).contains("another build is running"));
+    assert_eq!(fixture.cargo_runs().len(), 0);
+    assert!(lock.exists(), "leave the other process's lock alone");
 }
 
 #[test]

@@ -47,54 +47,53 @@ Ask for a review, a design or an audit, and the matching skill takes over. You c
 
 ## Install
 
-The plugin builds from source on your machine, so you need Rust and a C compiler first. Install Rust with [rustup](https://rustup.rs):
+Run one installer on macOS, Linux, or WSL:
 
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh
 ```
 
-If you don't have a C compiler yet, install one:
+It detects Claude Code, Codex and pi on your `PATH`, asks which to install for, and uses their own plugin installers to download the source. It builds the shared Rust binary synchronously and checks that the MCP server exposes `check` and `interface` before reporting success. Start a new agent session when it finishes. Session hooks do not build anything.
 
+For unattended installation, name the agents explicitly:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh | sh -s -- codex claude
 ```
+
+To inspect the script before running it:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/iaserrat/software-design/main/install.sh -o install.sh
+sh install.sh
+```
+
+### Prerequisites
+
+You need an agent CLI, Git, Rust and a C compiler. The installer checks these before changing agent registrations. Install Rust with [rustup](https://rustup.rs); `rust-toolchain.toml` pins the version. For a C compiler:
+
+```sh
 xcode-select --install             # macOS
 sudo apt install build-essential   # Debian and Ubuntu
 ```
 
-You don't need to pick a Rust version: `rust-toolchain.toml` pins it, and rustup fetches it on the first build.
+A cold build takes a few minutes. The binary goes to `~/.software-design/bin/software-design`, and build output goes to `~/.software-design/build.log`. Agents running the same plugin release share that binary.
 
-**Claude Code**
+### Updates and manual installs
 
-```
-/plugin marketplace add iaserrat/software-design
-/plugin install software-design@software-design
-```
+Rerun the same installer to refresh the selected agents and build their runtime before starting a new session. If you update through an agent's plugin manager instead, run `sh scripts/software-design install` from its installed plugin directory before starting a session. A launcher refuses a binary from another release; missing-runtime hooks explain how to install it and tolerate the failure.
 
-**Codex**
+The native plugin commands remain available:
 
-```
+```sh
+claude plugin marketplace add iaserrat/software-design
+claude plugin install software-design@software-design --scope user
 codex plugin marketplace add iaserrat/software-design
 codex plugin add software-design@software-design
-```
-
-**pi**
-
-```
 pi install git:github.com/iaserrat/software-design
 ```
 
-### The first session
-
-The first session after installing starts a build in the background. It runs `cargo install --locked` on the plugin's own source. The binary goes to `~/.software-design/bin/software-design` and the log to `~/.software-design/build.log`. A cold build takes a few minutes, and it keeps running if you close the session.
-
-The red-flag checks start as soon as it finishes. In Claude Code, run `/mcp` to reconnect the plugin's tools in that first session; in Codex and pi, start a new session.
-
-To build before your first session, run the launcher yourself. For Claude Code:
-
-```
-sh ~/.claude/plugins/marketplaces/software-design/scripts/software-design install
-```
-
-When the plugin updates to a new version, the next session rebuilds. The launcher won't run a binary whose version differs from the plugin's, so an old build never runs against new skills. Once a day the launcher checks the version on `main`, and a session start tells you when a newer one is out.
+After a manual install, build from the installed plugin directory with `sh scripts/software-design install`, then start a new session. The global installer does this for you.
 
 ## What you get
 
@@ -232,7 +231,7 @@ $ software-design check src
   red flags in the lines just written ──► back to the agent, before the turn ends
 ```
 
-One Rust binary does all the analysis. The hooks, the MCP server and the command line all call the same analysis code, so they report the same findings. A small POSIX shell launcher picks the build that matches the installed plugin version and builds it when it is missing. A hook never fails because the binary isn't there yet.
+One Rust binary does all the analysis. The hooks, the MCP server and the command line all call the same analysis code, so they report the same findings. A small POSIX shell launcher runs the binary that matches the installed plugin version. The global installer builds it before the first session. A hook never fails because the binary isn't there yet.
 
 ## Limits
 
@@ -266,7 +265,7 @@ The host adapters are thin. `.claude-plugin/` and `.codex-plugin/` are manifests
 
 ### Releasing
 
-Bump the version in four files, then push: `crates/software-design/Cargo.toml`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and `package.json`. A test fails if they differ. Each user's next session rebuilds.
+Bump the version in four files, then push: `crates/software-design/Cargo.toml`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and `package.json`. A test fails if they differ. Users rerun the global installer to update and build the release.
 
 ### Uninstalling
 

@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Lint the launcher
-        run: shellcheck -s sh scripts/software-design && shellcheck evals/*/setup.sh
+        run: shellcheck -s sh install.sh scripts/software-design && shellcheck evals/*/setup.sh
       - uses: astral-sh/setup-uv@v10.3.0
       - name: Validate the skills against the Agent Skills specification
         run: for skill in skills/*; do uvx --from skills-ref==0.1.1 agentskills validate "$skill"; done

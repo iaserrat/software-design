@@ -2,29 +2,18 @@
 # Builds and runs the software-design binary for this plugin version.
 #
 #   scripts/software-design install   build this plugin's source into ~/.software-design
-#   scripts/software-design install --detach   the same, in a new session, returning at once
 #   scripts/software-design <args>    run that build
 #
-# The plugin ships source, not binaries: each machine compiles its own, so there
-# is nothing to sign or notarize. A SessionStart hook runs `install --detach`: hosts
-# may kill a hook's process group when they exit (`codex exec` does), so the build
-# runs in its own session. It does nothing when the installed binary is current,
-# and rebuilds after the plugin updates.
-#
-# Which binary runs: $SOFTWARE_DESIGN_BIN when set; target/release/software-design
-# when this plugin is a source checkout with a build; otherwise the installed one,
-# and only when it reports this version and was built from this plugin directory.
-# A hook never fails because the binary is missing: it prints nothing, and
-# session-start says why once.
+# The global installer builds before the user starts a session. Agent plugin
+# directories share a binary when their release versions match.
+# SOFTWARE_DESIGN_BIN overrides it; a source checkout can use target/release.
+# Hooks tolerate a missing binary and session-start explains how to install it.
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 home="${SOFTWARE_DESIGN_HOME:-$HOME/.software-design}"
 bin="$home/bin/software-design"
 lock="$home/build.lock"
-# The plugin directory the binary was built from. Each plugin version installs to
-# its own directory, so a change here means new source even without a new version.
-source_stamp="$home/source"
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/crates/software-design/Cargo.toml" | head -n 1)
 # The version on main, fetched at most daily by `install`; session-start tells the
 # user when it is newer. Best effort: offline, nothing is said.
@@ -44,8 +33,7 @@ building() {
 
 current() {
   [ -x "$bin" ] &&
-    [ "$("$bin" --version 2>/dev/null)" = "software-design $version" ] &&
-    [ "$(cat "$source_stamp" 2>/dev/null)" = "$root" ]
+    [ "$("$bin" --version 2>/dev/null)" = "software-design $version" ]
 }
 
 fetch_latest() {
@@ -62,7 +50,7 @@ update_notice() {
   new=$(cat "$latest" 2>/dev/null) || return 0
   [ -n "$new" ] && [ "$new" != "$version" ] || return 0
   [ "$(printf '%s\n%s\n' "$version" "$new" | sort -V | tail -n 1)" = "$new" ] || return 0
-  printf '{"systemMessage":"software-design: %s is out (you have %s). Update the plugin to get it; in Claude Code: /plugin marketplace update software-design"}\n' "$new" "$version"
+  printf '{"systemMessage":"software-design: %s is out (you have %s). Rerun the global installer to update and build it"}\n' "$new" "$version"
 }
 
 install() {
@@ -81,7 +69,7 @@ install() {
   fi
   if ! mkdir "$lock" 2>/dev/null; then
     echo "software-design: another build is running; see $home/build.log" >&2
-    return 0
+    return 1
   fi
   trap 'rm -rf "$lock"' EXIT INT TERM
   echo "$$" >"$lock/pid"
@@ -90,21 +78,10 @@ install() {
     echo "software-design: the build failed; see $home/build.log" >&2
     return 1
   fi
-  printf '%s\n' "$root" >"$source_stamp"
   echo "software-design: installed $bin" >&2
 }
 
 if [ "${1-}" = install ]; then
-  if [ "${2-}" = --detach ]; then
-    if command -v setsid >/dev/null 2>&1; then
-      setsid sh "$0" install </dev/null >/dev/null 2>&1 &
-    elif command -v perl >/dev/null 2>&1; then
-      perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' sh "$0" install </dev/null >/dev/null 2>&1 &
-    else
-      sh "$0" install </dev/null >/dev/null 2>&1 &
-    fi
-    exit 0
-  fi
   install
   exit
 fi
@@ -114,14 +91,6 @@ if [ -n "${SOFTWARE_DESIGN_BIN-}" ]; then
 fi
 if [ -x "$root/target/release/software-design" ]; then
   exec "$root/target/release/software-design" "$@"
-fi
-# The MCP server starts with the session, while the first build may still run.
-if [ "${1-}" = mcp ]; then
-  waited=0
-  while building && [ "$waited" -lt 600 ]; do
-    sleep 2
-    waited=$((waited + 2))
-  done
 fi
 if current; then
   # The binary's session-start prints nothing, so this is the hook's only output.
@@ -133,11 +102,7 @@ fi
 
 if [ "${1-}" = hook ]; then
   if [ "${2-}" = session-start ]; then
-    if command -v cargo >/dev/null 2>&1; then
-      why="building $version into $home in the background (a few minutes on first install). Red-flag checks start when it finishes; then run /mcp to reconnect its tools. Log: $home/build.log"
-    else
-      why="needs Rust to build. Install it from https://rustup.rs and start a new session"
-    fi
+    why="version $version is not built. Run the installer from https://github.com/iaserrat/software-design, then start a new session"
     printf '{"systemMessage":"software-design: %s"}\n' "$why"
   fi
   exit 0

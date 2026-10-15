@@ -1,6 +1,6 @@
 {
   "name": "software-design",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Design smaller, deeper software: red-flag detection for TypeScript, JavaScript, React, Vue, Python, PHP and Rust, design-it-twice interface design, cold-reader interface reviews, and strategic change planning.",
   "author": {
     "name": "Ismael Serratos",
