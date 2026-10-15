@@ -6,9 +6,9 @@
 use std::collections::{BTreeSet, HashMap};
 
 use serde_json::json;
-use syntax::{Body, Call, Function, Span};
+use syntax::{Call, Function, Span};
 
-use crate::{Codebase, File, Finding, finding, is_test};
+use crate::{Codebase, File, Finding, finding, forwards_params, is_test};
 
 /// Two files must change together at least this often before co-change counts as
 /// a dependency rather than coincidence.
@@ -77,15 +77,13 @@ fn shallow_function(
     sites: &[&(&File, &Call)],
     out: &mut Vec<Finding>,
 ) {
-    let forwards = matches!(&function.body, Body::Forward(call)
-        if call.args.iter().map(|a| a.text.as_str()).eq(function.params.iter().map(String::as_str)));
     // A one-statement body that spans many lines (a `match`, a long iterator
     // chain) does real work behind its name; a shallow function is a line or two.
     let short = function.span.end - function.span.start < SHALLOW_LINES;
     if function.statements != 1
         || !short
         || function.overrides
-        || forwards
+        || forwards_params(function)
         || CONSTRUCTORS.contains(&function.name.as_str())
     {
         return;

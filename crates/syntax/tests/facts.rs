@@ -375,3 +375,30 @@ fn a_return_inside_a_closure_is_not_the_function_returning() {
     );
     assert!(!function(&ts, "run").returns_value);
 }
+
+#[test]
+fn declaration_comments_describe_their_headers() {
+    for (path, source) in [
+        (
+            "test.rs",
+            "/// Stores entries.\npub struct Store {}\n/// Finds an entry.\npub fn find() {}",
+        ),
+        (
+            "test.py",
+            "class Store:\n    \"\"\"Stores entries.\"\"\"\n    def find(self):\n        \"\"\"Finds an entry.\"\"\"\n        pass\n",
+        ),
+    ] {
+        let file = facts(path, source);
+        let declaration = &file.types[0];
+        let function = &file.functions[0];
+        for (header, doc) in [
+            (&declaration.header, declaration.doc),
+            (&function.header, function.doc),
+        ] {
+            let comment = &file.comments
+                [doc.unwrap_or_else(|| panic!("{path}: missing comment for {header}"))];
+            assert_eq!(&comment.code, header, "{path}");
+            assert_ne!(comment.text, "");
+        }
+    }
+}

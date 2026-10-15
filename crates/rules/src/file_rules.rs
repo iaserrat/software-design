@@ -3,7 +3,7 @@
 use serde_json::json;
 use syntax::{Body, Function};
 
-use crate::{File, Finding, Options, finding, is_test, words};
+use crate::{File, Finding, Options, finding, forwards_params, is_test, words};
 
 /// Generic names that say nothing about what they hold.
 const GENERIC_NAMES: &[&str] = &[
@@ -141,13 +141,6 @@ fn pass_through(path: &str, function: &Function, out: &mut Vec<Finding>) {
     let Body::Forward(call) = &function.body else {
         return;
     };
-    let args: Vec<&str> = call.args.iter().map(|a| a.text.as_str()).collect();
-    let forwards_params = args
-        == function
-            .params
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>();
     // A pass-through method calls a method of the same name on another object. A
     // differently named callee (`isSelected` -> `ids.includes`) names an operation
     // on a representation, which is information hiding, not delegation.
@@ -162,7 +155,7 @@ fn pass_through(path: &str, function: &Function, out: &mut Vec<Finding>) {
         .chars()
         .next()
         .is_some_and(|c| !c.is_uppercase());
-    if forwards_params && same_api && to_object && !function.overrides && !inheritance {
+    if forwards_params(function) && same_api && to_object && !function.overrides && !inheritance {
         let target = if call.receiver.is_empty() {
             call.callee.clone()
         } else {

@@ -251,3 +251,31 @@ fn finding(
         weight: 0,
     }
 }
+
+/// Whether the body forwards every parameter unchanged and in order.
+fn forwards_params(function: &syntax::Function) -> bool {
+    matches!(&function.body, syntax::Body::Forward(call)
+        if call.args.iter().map(|arg| arg.text.as_str())
+            .eq(function.params.iter().map(String::as_str)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forwards_params;
+
+    #[test]
+    fn forwarding_requires_all_parameters_in_order() {
+        for (source, expected) in [
+            ("fn f(a: i32, b: i32) { target(a, b) }", true),
+            ("fn f(a: i32, b: i32) { target(b, a) }", false),
+            ("fn f(a: i32, b: i32) { target(a) }", false),
+            ("fn f(a: i32) { target(a, 1) }", false),
+            ("fn f(a: i32) { target(1) }", false),
+            ("fn f() { target() }", true),
+            ("fn f(a: i32) { a + 1 }", false),
+        ] {
+            let facts = syntax::parse("test.rs", source).expect("Rust facts");
+            assert_eq!(forwards_params(&facts.functions[0]), expected, "{source}");
+        }
+    }
+}

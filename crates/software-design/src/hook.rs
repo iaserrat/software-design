@@ -18,8 +18,13 @@ use std::path::{Path, PathBuf};
 
 use history::Repo;
 use rules::{Finding, Tier};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+mod prompt;
+mod session;
+
+use prompt::nudge;
+use session::{Session, State};
 
 use crate::analysis::{self, DEFAULT_SINCE, Lines, Request};
 
@@ -31,129 +36,6 @@ enum Mode {
     Context,
     /// Also block the end of a turn while red flags remain.
     Block,
-}
-
-/// A kind of request one of the plugin's skills serves, recognised by a verb
-/// phrase together with a noun for code. Requiring both keeps "design a landing
-/// page" or "review my essay" from matching.
-struct Intent {
-    skill: &'static str,
-    verbs: &'static [&'static str],
-    nouns: &'static [&'static str],
-    why: &'static str,
-}
-
-/// Checked in order; the first match wins, so "review the design of X" is a review.
-const INTENTS: [Intent; 2] = [
-    Intent {
-        skill: "software-design:review",
-        verbs: &[
-            "review",
-            "design problem",
-            "well designed",
-            "well-designed",
-            "red flag",
-            "code smell",
-            "without reading",
-            "maintainab",
-            "look over",
-            "overcomplicated",
-            "over-engineered",
-            "tangled",
-            "messy",
-            "copy-paste",
-            "duplicated code",
-            "shallow",
-            "just a wrapper",
-        ],
-        nouns: &[
-            "code",
-            "diff",
-            "branch",
-            "pr",
-            "pull",
-            "file",
-            "module",
-            "class",
-            "api",
-            "interface",
-            "src",
-            "crate",
-            "package",
-            "service",
-            "controller",
-            "function",
-            "method",
-            "change",
-        ],
-        why: "it finds red flags with file and line evidence, verifies each against the rule's exemptions, \
-and tests public interfaces on a reader who sees only signatures and comments",
-    },
-    Intent {
-        skill: "software-design:design",
-        verbs: &[
-            "design",
-            "sketch",
-            "structure",
-            "shape",
-            "architect",
-            "what methods",
-            "which methods",
-            "lay out",
-            "look like",
-            "planning",
-            "split",
-        ],
-        nouns: &[
-            "class",
-            "module",
-            "api",
-            "interface",
-            "service",
-            "library",
-            "abstraction",
-            "client",
-            "composable",
-            "struct",
-            "trait",
-            "crate",
-            "package",
-        ],
-        why: "it compares independent designs and tests each interface on a reader who has not seen it",
-    },
-];
-
-/// The context to add for a prompt one of the plugin's skills serves. Slash
-/// commands are explicit choices and get none.
-fn nudge(prompt: &str) -> Option<String> {
-    let prompt = prompt.to_lowercase();
-    if prompt.trim_start().starts_with('/') {
-        return None;
-    }
-    let words: Vec<&str> = prompt
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .collect();
-    let has_word = |noun: &str| {
-        words
-            .iter()
-            .any(|w| *w == noun || w.strip_suffix('s') == Some(noun))
-    };
-    INTENTS
-        .iter()
-        .find(|intent| {
-            intent.nouns.iter().any(|n| has_word(n))
-                && intent.verbs.iter().any(|v| prompt.contains(v))
-        })
-        .map(|intent| {
-            format!(
-                "software-design: the {skill} skill serves this request. Before answering, and before \
-exploring the repository, load the {skill} skill (in Claude Code, call the Skill tool with skill \"{skill}\"): {why}. The skill reads the code it \
-needs itself.",
-                skill = intent.skill,
-                why = intent.why
-            )
-        })
 }
 
 /// Findings listed in one message; the rest are counted.
@@ -309,78 +191,4 @@ fn list(findings: &[&Finding]) -> String {
         lines.push(format!("- and {} more", findings.len() - MAX_LISTED));
     }
     lines.join("\n")
-}
-
-/// Session state older than this belongs to sessions that have ended.
-const SESSION_TTL: std::time::Duration = std::time::Duration::from_hours(720);
-
-/// What a session remembers between hooks. A missing or unreadable file is the
-/// default: no base commit, nothing reported yet.
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct State {
-    /// `HEAD` when the session started; lines added since are the session's.
-    #[serde(default)]
-    base: Option<String>,
-    /// [`key`]s of findings already reported, so each is reported once.
-    #[serde(default)]
-    reported: BTreeSet<String>,
-}
-
-/// Where a session's [`State`] lives in the plugin's data directory. Absent when
-/// the plugin has no data directory.
-struct Session {
-    path: PathBuf,
-}
-
-impl Session {
-    fn dir() -> Option<PathBuf> {
-        Some(PathBuf::from(std::env::var_os("CLAUDE_PLUGIN_DATA")?).join("sessions"))
-    }
-
-    fn open(session_id: Option<&str>) -> Option<Session> {
-        let dir = Session::dir()?;
-        let id = session_id.filter(|id| {
-            !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-        })?;
-        std::fs::create_dir_all(&dir).ok()?;
-        Some(Session {
-            path: dir.join(format!("{id}.json")),
-        })
-    }
-
-    fn load(&self) -> State {
-        std::fs::read_to_string(&self.path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    }
-
-    /// Deletes state files of sessions inactive for longer than [`SESSION_TTL`].
-    fn prune() {
-        let Some(entries) = Session::dir().and_then(|d| std::fs::read_dir(d).ok()) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let stale = entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .is_ok_and(|t| t.elapsed().is_ok_and(|age| age > SESSION_TTL));
-            if stale {
-                // software-design-allow: ignored-error a file another session already pruned is the goal reached
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
-    }
-
-    /// Writes through a temporary file so a concurrent reader never sees half a file.
-    fn save(&self, state: &State) {
-        let temp = self.path.with_extension("tmp");
-        let Ok(text) = serde_json::to_string(state) else {
-            return;
-        };
-        if std::fs::write(&temp, text).is_ok() {
-            // software-design-allow: ignored-error losing state only means a finding is reported twice
-            let _ = std::fs::rename(&temp, &self.path);
-        }
-    }
 }
