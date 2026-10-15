@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="dark">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>software-design</title>
+<meta name="description" content="A plugin for Claude Code, Codex and pi that applies A Philosophy of Software Design while your coding agent writes code.">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #121212;
+  --ink: #d4d4d4;
+  --bright: #f0f0f0;
+  --dim: #8e8e8e;
+  --rule: #3a3a3a;
+  --row: #262626;
+  --code: #1a1a1a;
+  --red: #ff6b55;
+  --green: #7cc28a;
+  --sans: -apple-system, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--bg); color: var(--ink); font: 400 1rem/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+main { max-width: 42rem; margin: 0 auto; padding: 4.5rem 1rem 6rem; }
+a { color: var(--bright); text-decoration-color: var(--rule); text-underline-offset: .2em; }
+a:hover { text-decoration-color: var(--bright); }
+:focus-visible { outline: 1px solid var(--bright); outline-offset: 3px; }
+code, pre { font-family: var(--mono); font-size: .8rem; }
+
+header { margin-bottom: 3.25rem; }
+h1 { color: #fff; font-size: 1.5rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.2; }
+.label { color: var(--dim); font-size: .8rem; font-weight: 400; letter-spacing: .08em; text-transform: uppercase; }
+header .label { margin: .6rem 0 1rem; }
+header p:last-child { max-width: 34rem; }
+
+section { border-top: 1px solid var(--rule); margin-top: 2.75rem; padding-top: 2.75rem; }
+section > .label { margin-bottom: 1.25rem; }
+section > p + p { margin-top: 1rem; }
+
+.rows { list-style: none; }
+.rows li { display: grid; grid-template-columns: 8.5rem 1fr; gap: 0 1rem; padding: .55rem 0; }
+.rows li + li { border-top: 1px solid var(--row); }
+.rows .k { color: var(--dim); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; padding-top: .15rem; }
+.rows .k code { font-size: .78rem; letter-spacing: 0; text-transform: none; }
+@media (max-width: 34rem) { .rows li { grid-template-columns: 1fr; } }
+
+pre { background: var(--code); border: 1px solid var(--row); border-radius: 6px; padding: .9rem 1rem; overflow-x: auto; line-height: 1.75; color: var(--ink); }
+.rows pre { margin-top: .1rem; }
+.p, .d { color: var(--dim); user-select: none; }
+.d { user-select: auto; }
+.g { color: var(--green); }
+.r { color: var(--red); }
+.example { margin: 1.25rem 0; }
+.note { color: var(--dim); font-size: .9rem; margin-top: 1rem; }
+
+footer { border-top: 1px solid var(--rule); margin-top: 2.75rem; padding-top: 2.75rem; color: var(--dim); font-size: .9rem; }
+footer p + p { margin-top: .75rem; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>software-design</h1>
+  <p class="label">A plugin for coding agents</p>
+  <p>Applies <i>A Philosophy of Software Design</i> to the code your agent writes, and flags design problems before the turn ends.</p>
+</header>
+
+<section>
+  <h2 class="label">What it does</h2>
+  <p>After every edit, it checks the lines the agent just wrote for the book's red flags and tells the agent while the context is still fresh. Findings in files that change often come first.</p>
+  <pre class="example"><span class="d">● Update(src/editor.ts)</span>
+<span class="g">+ insert(text: string, at: number) { this.area.insert(text, at); }</span>
+
+<span class="r">software-design</span> <span class="d">red flag</span>
+src/editor.ts:6 <span class="r">pass-through-method</span>
+<span class="d">`insert` only forwards its arguments to `this.area.insert`.</span></pre>
+  <p>The agent fixes it, or keeps it and says why. A suppression without a reason is ignored.</p>
+</section>
+
+<section>
+  <h2 class="label">Install</h2>
+  <ul class="rows">
+    <li><span class="k">Claude Code</span><pre><span class="p">› </span>/plugin marketplace add iaserrat/software-design
+<span class="p">› </span>/plugin install software-design@software-design</pre></li>
+    <li><span class="k">Codex</span><pre><span class="p">$ </span>codex plugin marketplace add iaserrat/software-design
+<span class="p">$ </span>codex plugin add software-design@software-design</pre></li>
+    <li><span class="k">pi</span><pre><span class="p">$ </span>pi install git:github.com/iaserrat/software-design</pre></li>
+  </ul>
+  <p class="note">Builds from source on first run. Needs <a href="https://rustup.rs">Rust</a> and a C compiler.</p>
+</section>
+
+<section>
+  <h2 class="label">Skills</h2>
+  <ul class="rows">
+    <li><span class="k">Design</span><span>Three competing interfaces, each tested on a reader who has never seen the code.</span></li>
+    <li><span class="k">Review</span><span>Verifies the red flags in a diff or branch and reports the five that cost the most.</span></li>
+    <li><span class="k">Change</span><span>Weighs the smallest patch against the design the code should have.</span></li>
+    <li><span class="k">Audit</span><span>Hotspots, verified findings, and the investments to make first.</span></li>
+    <li><span class="k">Document</span><span>Comments that say what the code cannot.</span></li>
+    <li><span class="k">Perf</span><span>Faster code without more complexity.</span></li>
+  </ul>
+  <p class="note">Call one by name, like <code>/software-design:review</code>, or just ask.</p>
+</section>
+
+<section>
+  <h2 class="label">Coverage</h2>
+  <ul class="rows">
+    <li><span class="k">Languages</span><span>TypeScript, JavaScript, React, Vue, Python, PHP, Rust</span></li>
+    <li><span class="k">Detectors</span><span>Thirteen, each citing its section of the book. <a href="https://github.com/iaserrat/software-design#the-rules">See the rules</a></span></li>
+    <li><span class="k">Hosts</span><span>Claude Code, Codex, pi</span></li>
+  </ul>
+</section>
+
+<footer>
+  <p>Based on <i>A Philosophy of Software Design</i> by <a href="https://web.stanford.edu/~ouster/cgi-bin/home.php">John Ousterhout</a>. Not affiliated with the author or publisher. The book explains why each red flag matters; <a href="https://www.amazon.com/dp/173210221X">buy a copy</a>.</p>
+  <p><a href="https://github.com/iaserrat/software-design">GitHub</a> · MIT · <a href="https://ismael.co">Ismael Serratos</a></p>
+</footer>
+
+</main>
+</body>
+</html>
