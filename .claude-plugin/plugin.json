@@ -1,7 +1,7 @@
 {
   "name": "software-design",
   "displayName": "Software Design",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Design smaller, deeper software: red-flag detection for TypeScript, JavaScript, React, Vue, Python, PHP and Rust, design-it-twice interface design, cold-reader interface reviews, and strategic change planning.",
   "author": {
     "name": "Ismael Serratos",
@@ -16,7 +16,6 @@
       "type": "string",
       "title": "Red-flag hooks",
       "description": "off: no hooks. context: after each edit, tell Claude about red flags in the lines it wrote. block: also refuse to end a turn while those red flags remain.",
-      "options": ["off", "context", "block"],
       "default": "context"
     }
   },
